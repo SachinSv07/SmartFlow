@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Police Traffic Command Center</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Top Navigation Bar -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>TRAFFIC COMMAND CENTER</span>
+                </div>
+                <div class="nav-tabs">
+                    <button class="nav-tab active">Dashboard</button>
+                    <button class="nav-tab" onclick="window.location.href='/detection'">Live Detection</button>
+                    <button class="nav-tab">Analytics</button>
+                    <button class="nav-tab">Reports</button>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="system-status">
+                    <span class="status-dot active"></span>
+                    <span id="system-status-text">System Active</span>
+                </div>
+                <div class="current-time" id="current-time"></div>
+                <button class="notification-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <span class="notification-badge">3</span>
+                </button>
+                <div class="user-profile">
+                    <span>Officer J. Smith</span>
+                    <div class="avatar">JS</div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Critical Stats Overview -->
+            <section class="stats-overview">
+                <div class="stat-card critical">
+                    <div class="stat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Vehicles</div>
+                        <div class="stat-value" id="total-vehicles">0</div>
+                        <div class="stat-change positive" id="vehicle-change">+12% from avg</div>
+                    </div>
+                </div>
+
+                <div class="stat-card warning">
+                    <div class="stat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4M12 8h.01"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Congestion Level</div>
+                        <div class="stat-value" id="congestion-level">LOW</div>
+                        <div class="stat-change" id="congestion-trend">Normal flow</div>
+                    </div>
+                </div>
+
+                <div class="stat-card info">
+                    <div class="stat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Active Phase</div>
+                        <div class="stat-value" id="active-phase">North-South</div>
+                        <div class="stat-change" id="phase-timer">45s remaining</div>
+                    </div>
+                </div>
+
+                <div class="stat-card success">
+                    <div class="stat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">System Efficiency</div>
+                        <div class="stat-value" id="efficiency">87%</div>
+                        <div class="stat-change positive">+5% today</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Traffic Intersection Visual & Controls -->
+            <div class="main-grid">
+                <!-- Left Column: Intersection Visual -->
+                <section class="intersection-panel">
+                    <div class="panel-header">
+                        <h2>Live Intersection Status</h2>
+                        <div class="panel-actions">
+                            <button class="btn-icon" title="Refresh">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="intersection-visual">
+                        <div class="intersection-container">
+                            <div class="road horizontal"></div>
+                            <div class="road vertical"></div>
+                            
+                            <!-- Traffic Signals -->
+                            <div class="traffic-signal north" id="signal-north">
+                                <div class="signal-lights">
+                                    <div class="signal-light red active"></div>
+                                    <div class="signal-light yellow"></div>
+                                    <div class="signal-light green"></div>
+                                </div>
+                                <div class="signal-label">NORTH</div>
+                            </div>
+                            
+                            <div class="traffic-signal south" id="signal-south">
+                                <div class="signal-lights">
+                                    <div class="signal-light red active"></div>
+                                    <div class="signal-light yellow"></div>
+                                    <div class="signal-light green"></div>
+                                </div>
+                                <div class="signal-label">SOUTH</div>
+                            </div>
+                            
+                            <div class="traffic-signal east" id="signal-east">
+                                <div class="signal-lights">
+                                    <div class="signal-light red active"></div>
+                                    <div class="signal-light yellow"></div>
+                                    <div class="signal-light green"></div>
+                                </div>
+                                <div class="signal-label">EAST</div>
+                            </div>
+                            
+                            <div class="traffic-signal west" id="signal-west">
+                                <div class="signal-lights">
+                                    <div class="signal-light red active"></div>
+                                    <div class="signal-light yellow"></div>
+                                    <div class="signal-light green"></div>
+                                </div>
+                                <div class="signal-label">WEST</div>
+                            </div>
+
+                            <!-- Countdown Timer -->
+                            <div class="countdown-display" id="countdown-display">
+                                <div class="countdown-value" id="countdown-value">45</div>
+                                <div class="countdown-label">seconds</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Control Buttons -->
+                    <div class="control-panel">
+                        <button class="btn-control btn-start" id="start-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            Start System
+                        </button>
+                        <button class="btn-control btn-stop" id="stop-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="6" width="12" height="12"/>
+                            </svg>
+                            Stop System
+                        </button>
+                        <button class="btn-control btn-override" id="override-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                            Manual Override
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Right Column: Direction Details -->
+                <section class="direction-details">
+                    <div class="panel-header">
+                        <h2>Direction Analytics</h2>
+                    </div>
+                    <div class="direction-cards">
+                        <div class="direction-card" id="card-north">
+                            <div class="direction-header">
+                                <div class="direction-name">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2l-7 7h4v13h6V9h4z"/>
+                                    </svg>
+                                    NORTH
+                                </div>
+                                <div class="signal-indicator red" id="indicator-north"></div>
+                            </div>
+                            <div class="direction-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Vehicles</span>
+                                    <span class="stat-value" id="vehicles-north">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Density</span>
+                                    <span class="stat-value" id="density-north">0%</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Wait Time</span>
+                                    <span class="stat-value" id="wait-north">0s</span>
+                                </div>
+                            </div>
+                            <div class="density-bar">
+                                <div class="density-fill" id="density-fill-north"></div>
+                            </div>
+                        </div>
+
+                        <div class="direction-card" id="card-south">
+                            <div class="direction-header">
+                                <div class="direction-name">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 22l7-7h-4V2H9v13H5z"/>
+                                    </svg>
+                                    SOUTH
+                                </div>
+                                <div class="signal-indicator red" id="indicator-south"></div>
+                            </div>
+                            <div class="direction-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Vehicles</span>
+                                    <span class="stat-value" id="vehicles-south">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Density</span>
+                                    <span class="stat-value" id="density-south">0%</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Wait Time</span>
+                                    <span class="stat-value" id="wait-south">0s</span>
+                                </div>
+                            </div>
+                            <div class="density-bar">
+                                <div class="density-fill" id="density-fill-south"></div>
+                            </div>
+                        </div>
+
+                        <div class="direction-card" id="card-east">
+                            <div class="direction-header">
+                                <div class="direction-name">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M22 12l-7-7v4H2v6h13v4z"/>
+                                    </svg>
+                                    EAST
+                                </div>
+                                <div class="signal-indicator red" id="indicator-east"></div>
+                            </div>
+                            <div class="direction-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Vehicles</span>
+                                    <span class="stat-value" id="vehicles-east">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Density</span>
+                                    <span class="stat-value" id="density-east">0%</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Wait Time</span>
+                                    <span class="stat-value" id="wait-east">0s</span>
+                                </div>
+                            </div>
+                            <div class="density-bar">
+                                <div class="density-fill" id="density-fill-east"></div>
+                            </div>
+                        </div>
+
+                        <div class="direction-card" id="card-west">
+                            <div class="direction-header">
+                                <div class="direction-name">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M2 12l7 7v-4h13V9H9V5z"/>
+                                    </svg>
+                                    WEST
+                                </div>
+                                <div class="signal-indicator red" id="indicator-west"></div>
+                            </div>
+                            <div class="direction-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Vehicles</span>
+                                    <span class="stat-value" id="vehicles-west">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Density</span>
+                                    <span class="stat-value" id="density-west">0%</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Wait Time</span>
+                                    <span class="stat-value" id="wait-west">0s</span>
+                                </div>
+                            </div>
+                            <div class="density-bar">
+                                <div class="density-fill" id="density-fill-west"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Analytics Section -->
+            <div class="analytics-grid">
+                <!-- Traffic Flow Chart -->
+                <section class="chart-panel">
+                    <div class="panel-header">
+                        <h2>Vehicle Distribution</h2>
+                        <select class="chart-filter">
+                            <option>Real-time</option>
+                            <option>Last Hour</option>
+                            <option>Last 24 Hours</option>
+                        </select>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="vehicleChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- Congestion Trends -->
+                <section class="chart-panel">
+                    <div class="panel-header">
+                        <h2>Congestion Trends</h2>
+                        <select class="chart-filter">
+                            <option>Last 10 Minutes</option>
+                            <option>Last Hour</option>
+                            <option>Today</option>
+                        </select>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="congestionChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- Activity Log -->
+                <section class="log-panel">
+                    <div class="panel-header">
+                        <h2>Signal Activity Log</h2>
+                        <button class="btn-text">Clear Log</button>
+                    </div>
+                    <div class="log-container" id="activity-log">
+                        <div class="log-entry">
+                            <span class="log-time">--:--:--</span>
+                            <span class="log-message">System initialized</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- AI Insights -->
+                <section class="insights-panel">
+                    <div class="panel-header">
+                        <h2>AI Traffic Insights</h2>
+                        <span class="ai-badge">AI</span>
+                    </div>
+                    <div class="insights-container" id="insights-container">
+                        <div class="insight-card">
+                            <div class="insight-icon">💡</div>
+                            <div class="insight-content">
+                                <div class="insight-title">Recommendation</div>
+                                <div class="insight-text">System is optimizing traffic flow based on current vehicle density.</div>
+                            </div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-icon">📊</div>
+                            <div class="insight-content">
+                                <div class="insight-title">Analysis</div>
+                                <div class="insight-text">Peak traffic detected on North-South corridor.</div>
+                            </div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-icon">⚠️</div>
+                            <div class="insight-content">
+                                <div class="insight-title">Alert</div>
+                                <div class="insight-text">Monitor West direction for potential congestion buildup.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

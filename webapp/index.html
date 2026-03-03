@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modern Traffic Intersection Simulation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Traffic Intersection Simulation</h1>
+    <div id="controls">
+      <button onclick="addVehicle()">Add Vehicle</button>
+      <button onclick="removeVehicle()">Remove Vehicle</button>
+      <label>Speed: <input type="range" id="speedRange" min="0.5" max="2" step="0.1" value="1" onchange="setSpeed(this.value)" /></label>
+      <span id="speedValue">1x</span>
+    </div>
+    <canvas id="intersection" width="600" height="600"></canvas>
+    <div id="stats"></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

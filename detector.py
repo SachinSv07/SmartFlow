@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import threading
 from ultralytics import YOLO
 from config import CLASS_WEIGHTS
 
@@ -8,11 +9,13 @@ class VehicleDetector:
         self.model = YOLO(model_path)
         self.device = device
         self.model.to(device)
+        self._infer_lock = threading.Lock()
         self.vehicle_classes = ['car', 'motorcycle', 'bus', 'truck']
 
     def detect(self, frame):
         # Run YOLOv8 detection
-        results = self.model(frame, device=self.device, verbose=False)[0]
+        with self._infer_lock:
+            results = self.model(frame, device=self.device, verbose=False)[0]
         detections = []
         vehicle_counts = {cls: 0 for cls in self.vehicle_classes}
         weighted_score = 0

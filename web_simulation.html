@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Web Traffic Signal Simulation</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f0f0f0; }
+        #intersection { margin: 40px auto; width: 400px; height: 400px; background: #fff; border: 2px solid #333; position: relative; }
+        .signal { width: 40px; height: 40px; border-radius: 50%; position: absolute; border: 2px solid #222; }
+        #signal-north { top: 10px; left: 180px; }
+        #signal-south { bottom: 10px; left: 180px; }
+        #signal-east { right: 10px; top: 180px; }
+        #signal-west { left: 10px; top: 180px; }
+        .label { position: absolute; font-size: 14px; font-weight: bold; }
+        #label-north { top: 0; left: 190px; }
+        #label-south { bottom: 0; left: 190px; }
+        #label-east { right: 0; top: 190px; }
+        #label-west { left: 0; top: 190px; }
+    </style>
+</head>
+<body>
+    <h2 style="text-align:center">Web Traffic Signal Simulation</h2>
+    <div id="intersection">
+        <div id="signal-north" class="signal"></div>
+        <div id="signal-south" class="signal"></div>
+        <div id="signal-east" class="signal"></div>
+        <div id="signal-west" class="signal"></div>
+        <div id="label-north" class="label">North</div>
+        <div id="label-south" class="label">South</div>
+        <div id="label-east" class="label">East</div>
+        <div id="label-west" class="label">West</div>
+    </div>
+    <script>
+        async function fetchSignalState() {
+            try {
+                const response = await fetch('http://localhost:5000/signal_state');
+                const state = await response.json();
+                // Example state: { north: 'green', south: 'red', east: 'red', west: 'green' }
+                updateSignals(state);
+            } catch (e) {
+                console.error('Failed to fetch signal state:', e);
+            }
+        }
+
+        function updateSignals(state) {
+            const colors = { green: '#0f0', yellow: '#ff0', red: '#f00' };
+            document.getElementById('signal-north').style.background = colors[state.north] || '#888';
+            document.getElementById('signal-south').style.background = colors[state.south] || '#888';
+            document.getElementById('signal-east').style.background = colors[state.east] || '#888';
+            document.getElementById('signal-west').style.background = colors[state.west] || '#888';
+        }
+
+        setInterval(fetchSignalState, 1000); // Poll every second
+        fetchSignalState();
+    </script>
+</body>
+</html>
