@@ -3,7 +3,8 @@ CLASS_WEIGHTS = {
     'car': 1,
     'motorcycle': 1,
     'bus': 3,
-    'truck': 4
+    'truck': 4,
+    'ambulance': 5
 }
 
 # Signal timing thresholds (weighted score: (min, max, duration))

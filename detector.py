@@ -10,7 +10,7 @@ class VehicleDetector:
         self.device = device
         self.model.to(device)
         self._infer_lock = threading.Lock()
-        self.vehicle_classes = ['car', 'motorcycle', 'bus', 'truck']
+        self.vehicle_classes = ['car', 'motorcycle', 'bus', 'truck', 'ambulance']
 
     def detect(self, frame):
         # Run YOLOv8 detection

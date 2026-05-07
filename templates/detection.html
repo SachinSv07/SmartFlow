@@ -20,6 +20,28 @@
 
         <!-- Main Content -->
         <main style="flex: 1; padding: 32px; display: flex; flex-direction: column; gap: 24px;">
+            <div class="emergency-banner" id="detection-emergency-banner" style="margin: 0;">
+                <div class="emergency-banner-left">
+                    <div class="emergency-banner-icon" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M12 2v6"/>
+                            <path d="M12 16v6"/>
+                            <path d="M4.93 4.93l4.24 4.24"/>
+                            <path d="M14.83 14.83l4.24 4.24"/>
+                            <path d="M2 12h6"/>
+                            <path d="M16 12h6"/>
+                            <path d="M4.93 19.07l4.24-4.24"/>
+                            <path d="M14.83 9.17l4.24-4.24"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="emergency-banner-title">AMBULANCE GEOFENCE ACTIVE</div>
+                        <div class="emergency-banner-subtitle" id="detection-emergency-subtitle">Monitoring detection feed</div>
+                    </div>
+                </div>
+                <div class="emergency-banner-badge" id="detection-emergency-badge">Normal</div>
+            </div>
+
             <!-- Direction Selector -->
             <section style="text-align: center;">
                 <div style="display: inline-flex; gap: 12px; background: #1a1b2e; padding: 12px; border-radius: 12px; box-shadow: 0 2px 16px #7c3aed22;">
@@ -36,7 +58,14 @@
                     <div id="current-direction-label" style="text-align: center; font-size: 24px; font-weight: bold; color: #a78bfa; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 2px;">
                         North Direction
                     </div>
-                    <div style="text-align: center; position: relative;">
+                    <div class="detection-stage" style="text-align: center; position: relative;">
+                        <div class="detection-emergency-overlay" id="detection-emergency-overlay">
+                            <div class="detection-emergency-text">
+                                <div class="detection-emergency-title">AMBULANCE PRIORITY GREEN</div>
+                                <div class="detection-emergency-meta" id="detection-emergency-meta">Waiting for ambulance event</div>
+                            </div>
+                            <div class="emergency-banner-badge" id="detection-overlay-badge">NORMAL</div>
+                        </div>
                         <img id="detection-video" 
                              src="/video_feed_north" 
                              style="width: 100%; max-width: 900px; height: auto; border-radius: 12px; box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);" 
@@ -87,6 +116,35 @@
     </div>
 
     <script>
+        async function refreshEmergencyState() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                const active = !!data.emergency_active;
+                const direction = (data.emergency_direction || 'north').toUpperCase();
+                const remaining = data.emergency_remaining ?? data.green_time_remaining ?? 0;
+
+                const banner = document.getElementById('detection-emergency-banner');
+                const overlay = document.getElementById('detection-emergency-overlay');
+                const badge = document.getElementById('detection-emergency-badge');
+                const overlayBadge = document.getElementById('detection-overlay-badge');
+                const subtitle = document.getElementById('detection-emergency-subtitle');
+                const meta = document.getElementById('detection-emergency-meta');
+
+                if (banner) banner.classList.toggle('active', active);
+                if (overlay) overlay.classList.toggle('active', active);
+                if (badge) badge.textContent = active ? `${direction} GREEN` : 'Normal';
+                if (overlayBadge) overlayBadge.textContent = active ? 'ACTIVE' : 'NORMAL';
+                if (subtitle) subtitle.textContent = active ? `Priority green running for ${direction}` : 'Monitoring detection feed';
+                if (meta) meta.textContent = active ? `Auto-clear in ${remaining}s` : 'Waiting for ambulance event';
+
+                const detectionCard = document.querySelector('.video-card-detection');
+                if (detectionCard) detectionCard.classList.toggle('active', active);
+            } catch (e) {
+                console.error('Failed to refresh emergency state:', e);
+            }
+        }
+
         // Direction switching
         document.querySelectorAll('.video-switch-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -100,6 +158,9 @@
                 this.classList.add('active');
             });
         });
+
+        refreshEmergencyState();
+        setInterval(refreshEmergencyState, 1000);
     </script>
 </body>
 </html>

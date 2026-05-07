@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Police Traffic Command Center</title>
+    <title>Smart Traffic Control Dashboard</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -19,13 +19,13 @@
                         <path d="M2 17l10 5 10-5"/>
                         <path d="M2 12l10 5 10-5"/>
                     </svg>
-                    <span>TRAFFIC COMMAND CENTER</span>
+                    <span>SMART TRAFFIC CONTROL DASHBOARD</span>
                 </div>
                 <div class="nav-tabs">
-                    <button class="nav-tab active">Dashboard</button>
-                    <button class="nav-tab" onclick="window.location.href='/detection'">Live Detection</button>
-                    <button class="nav-tab">Analytics</button>
-                    <button class="nav-tab">Reports</button>
+                    <button class="nav-tab active" data-tab="dashboard">Dashboard</button>
+                    <button class="nav-tab" data-tab="detection" onclick="window.location.href='/detection'">Live Detection</button>
+                    <button class="nav-tab" data-tab="analytics">Analytics</button>
+                    <button class="nav-tab" data-tab="reports">Reports</button>
                 </div>
             </div>
             <div class="nav-right">
@@ -34,7 +34,7 @@
                     <span id="system-status-text">System Active</span>
                 </div>
                 <div class="current-time" id="current-time"></div>
-                <button class="notification-btn">
+                <button class="notification-btn" id="notification-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -42,13 +42,35 @@
                     <span class="notification-badge">3</span>
                 </button>
                 <div class="user-profile">
-                    <span>Officer J. Smith</span>
+                    <span>Officer Rajesh Kumar</span>
                     <div class="avatar">JS</div>
                 </div>
             </div>
         </nav>
 
         <!-- Main Content -->
+        <div class="emergency-banner" id="emergency-banner">
+            <div class="emergency-banner-left">
+                <div class="emergency-banner-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M12 2v6"/>
+                        <path d="M12 16v6"/>
+                        <path d="M4.93 4.93l4.24 4.24"/>
+                        <path d="M14.83 14.83l4.24 4.24"/>
+                        <path d="M2 12h6"/>
+                        <path d="M16 12h6"/>
+                        <path d="M4.93 19.07l4.24-4.24"/>
+                        <path d="M14.83 9.17l4.24-4.24"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="emergency-banner-title">AMBULANCE DETECTED</div>
+                    <div class="emergency-banner-subtitle" id="emergency-banner-subtitle">Geofence monitoring active</div>
+                </div>
+            </div>
+            <div class="emergency-banner-badge" id="emergency-banner-badge">Normal</div>
+        </div>
+
         <div class="main-content">
             <!-- Critical Stats Overview -->
             <section class="stats-overview">
@@ -105,6 +127,26 @@
                         <div class="stat-change positive">+5% today</div>
                     </div>
                 </div>
+
+                <div class="stat-card critical" id="emergency-card">
+                    <div class="stat-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v6"/>
+                            <path d="M12 16v6"/>
+                            <path d="M4.93 4.93l4.24 4.24"/>
+                            <path d="M14.83 14.83l4.24 4.24"/>
+                            <path d="M2 12h6"/>
+                            <path d="M16 12h6"/>
+                            <path d="M4.93 19.07l4.24-4.24"/>
+                            <path d="M14.83 9.17l4.24-4.24"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Ambulance Priority</div>
+                        <div class="stat-value" id="emergency-status">Normal</div>
+                        <div class="stat-change" id="emergency-detail">Geofence monitoring active</div>
+                    </div>
+                </div>
             </section>
 
             <!-- Traffic Intersection Visual & Controls -->
@@ -114,7 +156,7 @@
                     <div class="panel-header">
                         <h2>Live Intersection Status</h2>
                         <div class="panel-actions">
-                            <button class="btn-icon" title="Refresh">
+                            <button class="btn-icon" id="refresh-btn" title="Refresh">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <polyline points="23 4 23 10 17 10"/>
                                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -192,6 +234,17 @@
                             </svg>
                             Manual Override
                         </button>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; width:100%; justify-content:center;">
+                            <select id="ambulance-direction" class="chart-filter" style="min-width:160px;">
+                                <option value="north">North</option>
+                                <option value="south">South</option>
+                                <option value="east">East</option>
+                                <option value="west">West</option>
+                            </select>
+                            <button class="btn-control btn-start" id="ambulance-btn" style="background:#dc2626;">
+                                Ambulance Priority Green
+                            </button>
+                        </div>
                     </div>
                 </section>
 
@@ -356,7 +409,7 @@
                 <section class="log-panel">
                     <div class="panel-header">
                         <h2>Signal Activity Log</h2>
-                        <button class="btn-text">Clear Log</button>
+                        <button class="btn-text" id="clear-log-btn">Clear Log</button>
                     </div>
                     <div class="log-container" id="activity-log">
                         <div class="log-entry">

@@ -14,6 +14,7 @@ active_direction = {'dir': 'north'}
 controller = TrafficController()
 sim_thread = None
 sim_stop_event = Event()
+ambulance_presence = {d: {'seen_at': 0.0, 'active': False} for d in directions}
 
 # --- Flask App ---
 app = Flask(__name__)
@@ -49,49 +50,127 @@ def update_detection_frame(frame, direction):
         latest_detection_frames[direction] = frame
 
 
+def get_geofence_box(frame, direction):
+    h, w = frame.shape[:2]
+    if direction in ('north', 'south'):
+        return (int(w * 0.34), int(h * 0.26), int(w * 0.66), int(h * 0.72))
+    return (int(w * 0.26), int(h * 0.34), int(w * 0.72), int(h * 0.66))
+
+
+def point_in_box(point, box):
+    x, y = point
+    x1, y1, x2, y2 = box
+    return x1 <= x <= x2 and y1 <= y <= y2
+
+
+def get_ambulance_priority_seconds(direction):
+    try:
+        snap = controller.intersection.get_snapshot()
+        dir_data = snap.get(direction, {})
+        vehicle_count = int(dir_data.get('vehicle_count', 0) or 0)
+        density = int(dir_data.get('density_percentage', 0) or 0)
+    except Exception:
+        vehicle_count = 0
+        density = 0
+
+    # Higher density means we keep the green longer so the ambulance can clear safely.
+    base = 8
+    density_bonus = max(0, density // 5)
+    queue_bonus = max(0, vehicle_count // 2)
+    return max(8, min(35, base + density_bonus + queue_bonus))
+
+
+def refresh_ambulance_priority(direction, frame_resized, geofence, detections):
+    ambulance_detected = False
+    for det in detections:
+        if det['class'] != 'ambulance':
+            continue
+        x1, y1, x2, y2 = det['bbox']
+        center = ((x1 + x2) // 2, (y1 + y2) // 2)
+        if point_in_box(center, geofence):
+            ambulance_detected = True
+            break
+
+    now = time.time()
+    if ambulance_detected:
+        seconds = get_ambulance_priority_seconds(direction)
+        ambulance_presence[direction]['seen_at'] = now
+        ambulance_presence[direction]['active'] = True
+        controller.trigger_emergency_priority(direction, duration=seconds, source='ambulance-detection')
+        cv2.putText(frame_resized, f"AMBULANCE GREEN: {seconds}s", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    else:
+        # Keep the corridor green briefly after the ambulance leaves, then release.
+        if ambulance_presence[direction]['active'] and now - ambulance_presence[direction]['seen_at'] > 2.0:
+            ambulance_presence[direction]['active'] = False
+            controller.clear_emergency_priority()
+            cv2.putText(frame_resized, "AMBULANCE CLEARED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+
 def detection_loop():
     from detector import VehicleDetector
     from config import YOLO_MODEL_PATH
+    
+    print("[Detection] Initialization starting...")
 
-    def detect_for_direction(direction, cap):
+    def detect_for_direction(direction, video_file):
+        from detector import VehicleDetector
+        from config import YOLO_MODEL_PATH
+        
         detector = VehicleDetector(YOLO_MODEL_PATH, device='cpu')
-        frame_count = 0
-        last_detection_frame = None
-
+        loop_count = 0
+        
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                print(f"[Detection-{direction}] End of video or cannot fetch the frame.")
+            cap = cv2.VideoCapture(video_file)
+            if not cap.isOpened():
+                print(f"[Detection-{direction}] ERROR: Cannot open video file {video_file}")
                 break
+                
+            loop_count += 1
+            if loop_count > 1:
+                print(f"[Detection-{direction}] Restarting video (loop #{loop_count})")
+            
+            frame_count = 0
+            last_detection_frame = None
 
-            frame_count += 1
-            target_width = 320
-            run_detection = (frame_count % 3 == 0)
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"[Detection-{direction}] End of video reached. Restarting...")
+                    break
 
-            if run_detection:
-                h, w = frame.shape[:2]
-                scale = target_width / w
-                frame_resized = cv2.resize(frame, (target_width, int(h * scale)))
-                detections, _, _ = detector.detect(frame_resized)
+                frame_count += 1
+                target_width = 320
+                run_detection = (frame_count % 3 == 0)
 
-                for det in detections:
-                    x1, y1, x2, y2 = det['bbox']
-                    cls = det['class']
-                    conf = det['conf']
-                    color = (0, 255, 0)
-                    cv2.rectangle(frame_resized, (x1, y1), (x2, y2), color, 2)
-                    label = f"{cls} {conf:.2f}"
-                    cv2.putText(frame_resized, label, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                if run_detection:
+                    h, w = frame.shape[:2]
+                    scale = target_width / w
+                    frame_resized = cv2.resize(frame, (target_width, int(h * scale)))
+                    detections, _, _ = detector.detect(frame_resized)
+                    geofence = get_geofence_box(frame_resized, direction)
 
-                last_detection_frame = frame_resized.copy()
-                update_detection_frame(last_detection_frame, direction)
-            elif last_detection_frame is not None:
-                update_detection_frame(last_detection_frame, direction)
+                    for det in detections:
+                        x1, y1, x2, y2 = det['bbox']
+                        cls = det['class']
+                        conf = det['conf']
+                        color = (0, 255, 0)
+                        cv2.rectangle(frame_resized, (x1, y1), (x2, y2), color, 2)
+                        label = f"{cls} {conf:.2f}"
+                        cv2.putText(frame_resized, label, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            if frame_count % 30 == 0:
-                print(f"[Detection-{direction}] Streaming frame {frame_count}")
+                    refresh_ambulance_priority(direction, frame_resized, geofence, detections)
 
-            time.sleep(0.01)
+                    last_detection_frame = frame_resized.copy()
+                    update_detection_frame(last_detection_frame, direction)
+                elif last_detection_frame is not None:
+                    update_detection_frame(last_detection_frame, direction)
+
+                if frame_count % 30 == 0:
+                    print(f"[Detection-{direction}] Streaming frame {frame_count}")
+
+                time.sleep(0.01)
+            
+            cap.release()
 
     video_files = {
         'north': 'north.mp4',
@@ -102,23 +181,57 @@ def detection_loop():
 
     all_exist = all(os.path.exists(f) for f in video_files.values())
     if all_exist:
-        caps = {d: cv2.VideoCapture(f) for d, f in video_files.items()}
         print('[Detection] Using intersection video files.')
+        threads = []
+        for d, video_file in video_files.items():
+            t = threading.Thread(target=detect_for_direction, args=(d, video_file), daemon=True)
+            t.start()
+            threads.append(t)
+        # Don't join - let threads run in background with infinite looping
     else:
         print('[Detection] Intersection videos not found. Using webcam for demo mode.')
-        caps = {'webcam': cv2.VideoCapture(0)}
-        if not caps['webcam'].isOpened():
+        cap_webcam = cv2.VideoCapture(0)
+        if not cap_webcam.isOpened():
             print('[Detection] ERROR: Could not open webcam. Please check your camera device.')
             return
-
-    threads = []
-    for d in (caps.keys() if all_exist else ['webcam']):
-        t = threading.Thread(target=detect_for_direction, args=(d, caps[d]), daemon=True)
+        # For webcam, we still open it normally (no looping)
+        def detect_webcam(cap):
+            detector = VehicleDetector(YOLO_MODEL_PATH, device='cpu')
+            frame_count = 0
+            last_detection_frame = None
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    print('[Detection] Webcam feed lost.')
+                    break
+                frame_count += 1
+                target_width = 320
+                run_detection = (frame_count % 3 == 0)
+                if run_detection:
+                    h, w = frame.shape[:2]
+                    scale = target_width / w
+                    frame_resized = cv2.resize(frame, (target_width, int(h * scale)))
+                    detections, _, _ = detector.detect(frame_resized)
+                    geofence = get_geofence_box(frame_resized, 'north')
+                    for det in detections:
+                        x1, y1, x2, y2 = det['bbox']
+                        cls = det['class']
+                        conf = det['conf']
+                        color = (0, 255, 0)
+                        cv2.rectangle(frame_resized, (x1, y1), (x2, y2), color, 2)
+                        label = f"{cls} {conf:.2f}"
+                        cv2.putText(frame_resized, label, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    refresh_ambulance_priority('north', frame_resized, geofence, detections)
+                    last_detection_frame = frame_resized.copy()
+                    update_detection_frame(last_detection_frame, 'north')
+                elif last_detection_frame is not None:
+                    update_detection_frame(last_detection_frame, 'north')
+                if frame_count % 30 == 0:
+                    print(f"[Detection-webcam] Streaming frame {frame_count}")
+                time.sleep(0.01)
+        
+        t = threading.Thread(target=detect_webcam, args=(cap_webcam,), daemon=True)
         t.start()
-        threads.append(t)
-
-    for t in threads:
-        t.join()
 
 
 @app.route('/')
@@ -181,6 +294,29 @@ def api_stop():
     global sim_stop_event
     sim_stop_event.set()
     return jsonify({'status': 'stopped'})
+
+
+@app.route('/api/override', methods=['POST'])
+def api_override():
+    if controller:
+        controller.manual_override()
+        return jsonify({'status': 'override_triggered'})
+    return jsonify({'error': 'Controller not initialized'}), 400
+
+
+@app.route('/api/emergency', methods=['POST'])
+def api_emergency():
+    if not controller:
+        return jsonify({'error': 'Controller not initialized'}), 400
+
+    data = request.get_json(silent=True) or {}
+    direction = data.get('direction', 'north')
+    duration = int(data.get('duration', 12))
+    if direction not in directions:
+        return jsonify({'error': 'Invalid direction'}), 400
+
+    controller.trigger_emergency_priority(direction, duration=duration, source=data.get('source', 'dashboard'))
+    return jsonify({'status': 'emergency_triggered', 'direction': direction, 'duration': duration})
 
 
 if __name__ == '__main__':

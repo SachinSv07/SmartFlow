@@ -82,7 +82,7 @@ def main():
                 cv2.rectangle(frame_resized, (x1, y1), (x2, y2), color, 2)
                 label = f"{cls} {conf:.2f}"
                 cv2.putText(frame_resized, label, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            update_detection_frame(frame_resized)
+            update_detection_frame(frame_resized, 'webcam')
         else:
             for d in ['north', 'south', 'east', 'west']:
                 frame = frames[d]
@@ -102,7 +102,7 @@ def main():
                     label = f"{cls} {conf:.2f}"
                     cv2.putText(frame_resized, label, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
             # Send latest detection frame to dashboard (show north view)
-            update_detection_frame(display_frames['north'])
+            update_detection_frame(display_frames['north'], 'north')
 
         # Send vehicle counts to dashboard
         try:

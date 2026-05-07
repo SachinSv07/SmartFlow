@@ -2,19 +2,65 @@
 let vehicleChart, congestionChart;
 let congestionHistory = [];
 let updateInterval;
+let lastStatusSnapshot = null;
+let timingLogInterval;
+const seenTimingEntries = new Set();
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
+    initializeInteractions();
     startDataUpdates();
+    fetchDashboardData();
     updateClock();
     setInterval(updateClock, 1000);
-    
+});
+
+function initializeInteractions() {
     // Control button handlers
     document.getElementById('start-btn').addEventListener('click', startSystem);
     document.getElementById('stop-btn').addEventListener('click', stopSystem);
     document.getElementById('override-btn').addEventListener('click', manualOverride);
-});
+    const ambulanceBtn = document.getElementById('ambulance-btn');
+    if (ambulanceBtn) {
+        ambulanceBtn.addEventListener('click', triggerAmbulancePriority);
+    }
+
+    // Utility controls
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            refreshBtn.classList.add('is-loading');
+            await fetchDashboardData();
+            refreshBtn.classList.remove('is-loading');
+            showToast('Dashboard refreshed');
+        });
+    }
+
+    const clearLogBtn = document.getElementById('clear-log-btn');
+    if (clearLogBtn) {
+        clearLogBtn.addEventListener('click', () => {
+            const logContainer = document.getElementById('activity-log');
+            logContainer.innerHTML = '';
+            addLogEntry('Log cleared by operator');
+        });
+    }
+
+    const notificationBtn = document.getElementById('notification-btn');
+    if (notificationBtn) {
+        notificationBtn.addEventListener('click', () => {
+            const total = lastStatusSnapshot?.total_vehicles ?? 0;
+            showToast(`Current load: ${total} vehicles`);
+        });
+    }
+
+    // Non-implemented tabs feedback
+    document.querySelectorAll('.nav-tab[data-tab="analytics"], .nav-tab[data-tab="reports"]').forEach((tabBtn) => {
+        tabBtn.addEventListener('click', () => {
+            showToast(`${tabBtn.textContent.trim()} module coming soon`);
+        });
+    });
+}
 
 // Update clock
 function updateClock() {
@@ -137,6 +183,8 @@ function initializeCharts() {
 // Start data updates
 function startDataUpdates() {
     updateInterval = setInterval(fetchDashboardData, 1000);
+    timingLogInterval = setInterval(refreshTimingLog, 3000);
+    refreshTimingLog();
 }
 
 // Fetch and update dashboard data
@@ -147,12 +195,16 @@ async function fetchDashboardData() {
         
         if (data.error) {
             console.error('Error fetching data:', data.error);
+            setSystemStatus('Error', false);
             return;
         }
-        
+
+        lastStatusSnapshot = data;
+        setSystemStatus('System Active', true);
         updateDashboard(data);
     } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
+        setSystemStatus('Offline', false);
     }
 }
 
@@ -176,7 +228,35 @@ function updateDashboard(data) {
     document.getElementById('congestion-trend').textContent = trendTexts[congestionLevel] || 'Normal flow';
     
     // Update active phase
+    const emergencyActive = !!data.emergency_active;
+    const emergencyDirection = (data.priority_direction || data.emergency_direction || '').toLowerCase();
     document.getElementById('active-phase').textContent = data.active_phase || 'N/A';
+
+    // Emergency / ambulance priority state
+    const emergencyStatus = document.getElementById('emergency-status');
+    const emergencyDetail = document.getElementById('emergency-detail');
+    const emergencyCard = document.getElementById('emergency-card');
+    const emergencyBanner = document.getElementById('emergency-banner');
+    const emergencyBannerSubtitle = document.getElementById('emergency-banner-subtitle');
+    const emergencyBannerBadge = document.getElementById('emergency-banner-badge');
+    if (emergencyActive) {
+        const direction = (emergencyDirection || 'north').toUpperCase();
+        const remaining = data.emergency_remaining ?? data.green_time_remaining ?? 0;
+        if (emergencyStatus) emergencyStatus.textContent = `${direction} GREEN`;
+        if (emergencyDetail) emergencyDetail.textContent = `Ambulance priority active: ${remaining}s remaining`;
+        if (emergencyCard) emergencyCard.classList.add('active');
+        if (emergencyBanner) emergencyBanner.classList.add('active');
+        if (emergencyBannerSubtitle) emergencyBannerSubtitle.textContent = `Green corridor open for ${direction} approach • Auto-clear in ${remaining}s`;
+        if (emergencyBannerBadge) emergencyBannerBadge.textContent = `${direction} GREEN`;
+        setSystemStatus('EMERGENCY', true);
+    } else {
+        if (emergencyStatus) emergencyStatus.textContent = 'Normal';
+        if (emergencyDetail) emergencyDetail.textContent = 'Geofence monitoring active';
+        if (emergencyCard) emergencyCard.classList.remove('active');
+        if (emergencyBanner) emergencyBanner.classList.remove('active');
+        if (emergencyBannerSubtitle) emergencyBannerSubtitle.textContent = 'Geofence monitoring active';
+        if (emergencyBannerBadge) emergencyBannerBadge.textContent = 'Normal';
+    }
     
     // Update countdown timer
     const timeRemaining = data.green_time_remaining || 0;
@@ -208,15 +288,54 @@ function updateDashboard(data) {
             updateSignalLights(dir, signal);
         }
     });
+
+    // Hard-sync the visual lights in emergency mode to avoid stale states.
+    if (emergencyActive && emergencyDirection) {
+        directions.forEach(dir => {
+            const forcedState = dir === emergencyDirection ? 'GREEN' : 'RED';
+            const indicator = document.getElementById(`indicator-${dir}`);
+            if (indicator) {
+                indicator.className = 'signal-indicator ' + forcedState.toLowerCase();
+            }
+            updateSignalLights(dir, forcedState);
+        });
+    }
     
     // Update charts
     updateCharts(data);
     
-    // Update activity log
-    updateActivityLog(data);
-    
     // Update insights
     updateInsights(data);
+}
+
+function setSystemStatus(text, isActive) {
+    const statusText = document.getElementById('system-status-text');
+    const dot = document.querySelector('.status-dot');
+    if (!statusText || !dot) return;
+    statusText.textContent = text;
+    dot.classList.toggle('active', !!isActive);
+}
+
+async function triggerAmbulancePriority() {
+    const direction = document.getElementById('ambulance-direction')?.value || 'north';
+    try {
+        const response = await fetch('/api/emergency', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ direction, duration: 12, source: 'dashboard' })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            showToast(result.error || 'Failed to trigger ambulance priority');
+            return;
+        }
+        showToast(`Ambulance green activated for ${direction.toUpperCase()}`);
+        addLogEntry(`Ambulance priority triggered for ${direction.toUpperCase()}`);
+        await fetchDashboardData();
+    } catch (error) {
+        console.error('Failed to trigger ambulance priority:', error);
+        showToast('Failed to trigger ambulance priority');
+    }
 }
 
 // Update signal lights on intersection visual
@@ -272,37 +391,37 @@ function updateCharts(data) {
     congestionChart.update('none');
 }
 
-// Update activity log
-let lastLoggedPhase = '';
-function updateActivityLog(data) {
-    const logContainer = document.getElementById('activity-log');
-    const activePhase = data.active_phase;
-    
-    // Only log when phase changes
-    if (activePhase && activePhase !== lastLoggedPhase) {
-        lastLoggedPhase = activePhase;
-        
-        const now = new Date();
-        const timeString = now.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
+async function refreshTimingLog() {
+    try {
+        const response = await fetch('/api/timing_log');
+        const logs = await response.json();
+        if (!Array.isArray(logs) || logs.length === 0) {
+            return;
+        }
+
+        const logContainer = document.getElementById('activity-log');
+        logs.forEach((entry) => {
+            const key = `${entry.timestamp}|${entry.phase}|${entry.green_time}|${entry.total_vehicles}`;
+            if (seenTimingEntries.has(key)) return;
+
+            seenTimingEntries.add(key);
+            const densityPercent = Math.round((Number(entry.density_ratio || 0)) * 100);
+
+            const row = document.createElement('div');
+            row.className = 'log-entry';
+            row.innerHTML = `
+                <span class="log-time">${entry.timestamp || '--:--:--'}</span>
+                <span class="log-message">${entry.phase || 'Phase'} | Density: ${densityPercent}% | Vehicles: ${entry.total_vehicles ?? 0} | Green: ${entry.green_time ?? 0}s</span>
+            `;
+
+            logContainer.insertBefore(row, logContainer.firstChild);
         });
-        
-        const entry = document.createElement('div');
-        entry.className = 'log-entry';
-        entry.innerHTML = `
-            <span class="log-time">${timeString}</span>
-            <span class="log-message">Signal changed to ${activePhase}</span>
-        `;
-        
-        logContainer.insertBefore(entry, logContainer.firstChild);
-        
-        // Keep only last 10 entries
-        while (logContainer.children.length > 10) {
+
+        while (logContainer.children.length > 50) {
             logContainer.removeChild(logContainer.lastChild);
         }
+    } catch (error) {
+        console.error('Failed to fetch timing log:', error);
     }
 }
 
@@ -380,39 +499,71 @@ function updateInsights(data) {
 
 // Control functions
 async function startSystem() {
+    const btn = document.getElementById('start-btn');
+    setButtonBusy(btn, true);
     try {
         const response = await fetch('/api/start', { method: 'POST' });
         const data = await response.json();
         console.log('System started:', data);
-        
-        document.getElementById('system-status-text').textContent = 'System Active';
-        
-        addLogEntry('System started successfully');
+
+        setSystemStatus('System Active', true);
+        addLogEntry(data.status === 'already running' ? 'System already running' : 'System started successfully');
+        showToast(data.status === 'already running' ? 'System already running' : 'System started');
     } catch (error) {
         console.error('Failed to start system:', error);
+        showToast('Failed to start system');
+    } finally {
+        setButtonBusy(btn, false);
     }
 }
 
 async function stopSystem() {
+    const btn = document.getElementById('stop-btn');
+    setButtonBusy(btn, true);
     try {
         const response = await fetch('/api/stop', { method: 'POST' });
         const data = await response.json();
         console.log('System stopped:', data);
-        
-        document.getElementById('system-status-text').textContent = 'System Stopped';
-        
+
+        setSystemStatus('System Stopped', false);
         addLogEntry('System stopped');
+        showToast('System stopped');
     } catch (error) {
         console.error('Failed to stop system:', error);
+        showToast('Failed to stop system');
+    } finally {
+        setButtonBusy(btn, false);
     }
 }
 
 async function manualOverride() {
     const confirmed = confirm('Are you sure you want to enable manual override? This will override the AI traffic control.');
-    if (confirmed) {
-        console.log('Manual override activated');
-        addLogEntry('Manual override activated');
+    if (!confirmed) return;
+
+    const btn = document.getElementById('override-btn');
+    setButtonBusy(btn, true);
+    try {
+        const response = await fetch('/api/override', { method: 'POST' });
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        console.log('Manual override activated:', data);
+        addLogEntry('Manual override activated by operator');
+        showToast('Manual override activated');
+    } catch (error) {
+        console.error('Failed to trigger manual override:', error);
+        showToast('Manual override failed');
+    } finally {
+        setButtonBusy(btn, false);
     }
+}
+
+function setButtonBusy(buttonEl, isBusy) {
+    if (!buttonEl) return;
+    buttonEl.disabled = isBusy;
+    buttonEl.style.opacity = isBusy ? '0.7' : '1';
+    buttonEl.style.pointerEvents = isBusy ? 'none' : 'auto';
 }
 
 // Add log entry helper
@@ -434,4 +585,25 @@ function addLogEntry(message) {
     `;
     
     logContainer.insertBefore(entry, logContainer.firstChild);
+
+    while (logContainer.children.length > 25) {
+        logContainer.removeChild(logContainer.lastChild);
+    }
+}
+
+function showToast(message) {
+    const old = document.getElementById('dashboard-toast');
+    if (old) old.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'dashboard-toast';
+    toast.className = 'dashboard-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 250);
+    }, 2200);
 }
